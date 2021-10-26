@@ -7,6 +7,8 @@ import torch.distributed as dist
 from yolox.data import get_yolox_datadir
 from yolox.exp import Exp as MyExp
 
+from timm.optim import create_optimizer_v2
+
 
 class Exp(MyExp):
     def __init__(self):
@@ -15,14 +17,22 @@ class Exp(MyExp):
         self.depth = 0.67
         self.width = 0.75
 
-        self.warmup_epochs = 2
-        self.max_epoch = 120
+        self.warmup_epochs = 5
+        self.max_epoch = 300
+        self.warmup_lr = 0
+        self.basic_lr_per_img = 0.0005 / 512.0
+        self.scheduler = "yoloxwarmcos"
+        self.no_aug_epochs = 15
+        self.min_lr_ratio = 0.05
+        self.ema = True
+        self.weight_decay = 0.05
+        self.momentum = 0.9
 
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
     def get_model(self, sublinear=False):
         from yolox.models import YOLOX, YOLOPAFPN, YOLOXHead
-        from yolox.models.coat import coat_small, coat_lite_small
+        from yolox.models.coat import coat_small, coat_lite_small, coat_lite_tiny
 
         def init_yolo(M):
             for m in M.modules():
@@ -38,8 +48,8 @@ class Exp(MyExp):
             #                       return_interm_layers=True)
 
             # Use CoaT-Lite as backbone
-            in_channels = [128 / 0.75, 320 / 0.75, 512 / 0.75]  # 256, 512, 1024
-            coatl = coat_lite_small(embed_dims_override=[64, 128, 320, 512],
+            in_channels = [128 / 0.75, 256 / 0.75, 320 / 0.75]  # 256, 512, 1024
+            coatl = coat_lite_tiny(embed_dims_override=[64, 128, 256, 320],
                                     out_features=['x2_nocls', 'x3_nocls', 'x4_nocls'],
                                     return_interm_layers=True)
             backbone = YOLOPAFPN(self.depth, self.width, in_channels=in_channels, act=self.act,
@@ -164,3 +174,12 @@ class Exp(MyExp):
             num_classes=self.num_classes,
         )
         return evaluator
+
+
+    #Coat AdamW optimizer
+    def get_optimizer(self, batch_size):
+        lr = self.basic_lr_per_img * batch_size
+        self.optimizer = create_optimizer_v2(self.model, "adamw", lr, 0.05, self.momentum)
+
+        return self.optimizer
+
