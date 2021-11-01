@@ -20,7 +20,7 @@ class Exp(MyExp):
         self.warmup_epochs = 5
         self.max_epoch = 300
         self.warmup_lr = 0
-        self.basic_lr_per_img = 0.0005 / 512.0
+        self.basic_lr_per_img = 0.02 / 64.0
         self.scheduler = "yoloxwarmcos"
         self.no_aug_epochs = 15
         self.min_lr_ratio = 0.05
